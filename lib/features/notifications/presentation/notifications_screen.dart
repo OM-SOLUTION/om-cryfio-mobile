@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
-/// The Alerts tab. Empty for now.
+import 'package:om_cryfio/ui/widgets/empty_state.dart';
+
 class NotificationsScreen extends StatelessWidget {
   const NotificationsScreen({super.key});
 
@@ -8,7 +9,11 @@ class NotificationsScreen extends StatelessWidget {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(title: const Text('Notifications')),
-      body: const SizedBox.expand(),
+      body: const EmptyState(
+        icon: Icons.notifications_none,
+        title: 'No notifications',
+        message: 'Invitations, transfers and file activity appear here.',
+      ),
     );
   }
 }

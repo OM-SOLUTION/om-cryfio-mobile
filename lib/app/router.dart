@@ -2,6 +2,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import 'package:om_cryfio/app/app_shell.dart';
+import 'package:om_cryfio/app/dev_tools.dart';
 import 'package:om_cryfio/features/files/presentation/file_browser_screen.dart';
 import 'package:om_cryfio/features/notifications/presentation/notifications_screen.dart';
 import 'package:om_cryfio/features/settings/presentation/settings_screen.dart';
@@ -14,8 +15,7 @@ abstract final class AppRoutes {
   static const settings = '/settings';
 }
 
-/// There is no sign-in yet, so the app starts straight on the Files tab. Add a
-/// `redirect` for signed-out users once there is a session.
+/// There is no sign-in yet, so the app starts straight on the Files tab.
 final routerProvider = Provider<GoRouter>((ref) {
   final router = GoRouter(
     initialLocation: AppRoutes.files,
@@ -59,6 +59,7 @@ final routerProvider = Provider<GoRouter>((ref) {
           ),
         ],
       ),
+      ...devRoutes(),
     ],
   );
   ref.onDispose(router.dispose);
