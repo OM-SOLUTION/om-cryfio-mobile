@@ -1,30 +1,46 @@
-// This is a basic Flutter widget test.
-//
-// To perform an interaction with a widget in your test, use the WidgetTester
-// utility in the flutter_test package. For example, you can send tap and scroll
-// gestures. You can also use WidgetTester to find child widgets in the widget
-// tree, read text, and verify that the values of widget properties are correct.
-
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 
-import 'package:om_cryfio/main.dart';
+import 'package:om_cryfio/app/app.dart';
 
 void main() {
-  testWidgets('Counter increments smoke test', (WidgetTester tester) async {
-    // Build our app and trigger a frame.
-    await tester.pumpWidget(const MyApp());
+  Future<void> pumpApp(WidgetTester tester) async {
+    await tester.pumpWidget(const ProviderScope(child: OmCryfioApp()));
+    await tester.pumpAndSettle();
+  }
 
-    // Verify that our counter starts at 0.
-    expect(find.text('0'), findsOneWidget);
-    expect(find.text('1'), findsNothing);
+  // Tab icons could also appear inside screens, so look only in the bar.
+  Finder navIcon(IconData icon) => find.descendant(
+    of: find.byType(NavigationBar),
+    matching: find.byIcon(icon),
+  );
 
-    // Tap the '+' icon and trigger a frame.
-    await tester.tap(find.byIcon(Icons.add));
-    await tester.pump();
+  Future<void> openTab(WidgetTester tester, IconData icon) async {
+    await tester.tap(navIcon(icon));
+    await tester.pumpAndSettle();
+  }
 
-    // Verify that our counter has incremented.
-    expect(find.text('0'), findsNothing);
-    expect(find.text('1'), findsOneWidget);
+  testWidgets('app starts on the file browser', (tester) async {
+    await pumpApp(tester);
+
+    expect(find.widgetWithText(AppBar, 'My files'), findsOneWidget);
+    expect(find.byType(NavigationBar), findsOneWidget);
+  });
+
+  testWidgets('bottom navigation switches between tabs', (tester) async {
+    await pumpApp(tester);
+
+    await openTab(tester, Icons.people_outline);
+    expect(find.widgetWithText(AppBar, 'Shared'), findsOneWidget);
+
+    await openTab(tester, Icons.notifications_outlined);
+    expect(find.widgetWithText(AppBar, 'Notifications'), findsOneWidget);
+
+    await openTab(tester, Icons.settings_outlined);
+    expect(find.widgetWithText(AppBar, 'Settings'), findsOneWidget);
+
+    await openTab(tester, Icons.folder_outlined);
+    expect(find.widgetWithText(AppBar, 'My files'), findsOneWidget);
   });
 }
