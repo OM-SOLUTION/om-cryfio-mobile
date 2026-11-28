@@ -1,5 +1,5 @@
 import 'package:dio/dio.dart';
-import 'package:om_cryfio/features/auth/data/registration_api.dart';
+import 'package:om_cryfio/features/auth/data/datasources/registration_api.dart';
 import 'package:om_cryfio/features/auth/data/registration_crypto_service.dart';
 
 const baseUrl = String.fromEnvironment(
