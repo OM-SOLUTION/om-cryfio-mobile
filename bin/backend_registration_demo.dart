@@ -1,8 +1,8 @@
 import 'dart:io';
 
 import 'package:dio/dio.dart';
-import 'package:om_cryfio/features/auth/data/registration_api.dart';
-import 'package:om_cryfio/features/auth/data/registration_crypto_service.dart';
+import 'package:om_cryfio/features/auth/application/registration_flow.dart';
+import 'package:om_cryfio/features/auth/data/datasources/registration_api.dart';
 
 const baseUrl = String.fromEnvironment(
   'API_BASE_URL',
@@ -10,115 +10,81 @@ const baseUrl = String.fromEnvironment(
 );
 
 Future<void> main() async {
-  final api = RegistrationApi(
-    Dio(
-      BaseOptions(
-        baseUrl: baseUrl,
-        headers: {'Content-Type': 'application/json'},
-      ),
+  final dio = Dio(
+    BaseOptions(
+      baseUrl: baseUrl,
+      headers: {
+        'Accept': 'application/json',
+        'Content-Type': 'application/json',
+      },
+      connectTimeout: const Duration(seconds: 15),
+      receiveTimeout: const Duration(seconds: 30),
+      sendTimeout: const Duration(seconds: 30),
     ),
   );
 
-  print('==============================================');
-  print('        CRYFIO REGISTRATION TEST');
-  print('==============================================');
-  print('Backend: $baseUrl\n');
+  final flow = RegistrationFlow(RegistrationApi(dio));
+
+  print('========== REGISTRATION TEST ==========');
+  print('Backend: $baseUrl');
+  print('Use a disposable test account.\n');
 
   try {
-    // ---------- Step 1: create pending registration ----------
-    print('STEP 1 — Create registration');
+    final email = ask('Email');
+    final firstName = ask('First name');
+    final lastName = ask('Last name');
+    final username = ask('Username');
 
-    final email = _ask('Email');
-    final firstName = _ask('First name');
-    final lastName = _ask('Last name');
-    final username = _ask('Username');
+    print('\n1. Creating pending registration...');
 
-    final pending = await api.start(
-      StartRegistrationRequest(
-        email: email,
-        firstName: firstName,
-        lastName: lastName,
-        username: username,
-      ),
+    final pending = await flow.startRegistration(
+      email: email,
+      firstName: firstName,
+      lastName: lastName,
+      username: username,
     );
 
-    print('\nRegistration created successfully.');
     print('Account ID: ${pending.accountId}');
-    print('Email: ${pending.email}');
     print('Status: ${pending.status}');
 
-    // ---------- Step 2: verify email ----------
-    print('\nSTEP 2 — Verify email');
-    print('Check $email for the verification code.');
+    print('\n2. Check ${pending.email} for the email code.');
+    final code = ask('Email verification code');
 
-    final code = _ask('Email verification code');
-
-    final verified = await api.verifyEmail(
+    final verified = await flow.verifyEmail(
       accountId: pending.accountId,
       code: code,
     );
 
-    print('\nEmail verified successfully.');
-    print('Account ID: ${verified.accountId}');
-    print('Status: ${verified.status}');
-    print('Temporary registration token received.');
+    print('Email verified. Status: ${verified.status}');
 
-    // ---------- Step 3: create crypto material locally ----------
-    print('\nSTEP 3 — Create local encryption identity');
-    print('This password stays on this device. It is never sent to the backend.');
+    print('\n3. Preparing and uploading encryption material...');
+    print('The password is visible as you type; use a test password.');
+    final password = ask('Test password');
 
-    final password = _ask('Password for this local test');
-
-    final crypto = RegistrationCryptoService();
-    final prepared = await crypto.prepare(
+    final completed = await flow.completeRegistration(
+      verified: verified,
       password: password,
-      accountId: verified.accountId,
     );
 
-    try {
-      print('X25519 identity generated locally.');
-      print('Private key encrypted locally with Argon2id + AES-256-GCM.');
-      print('Plaintext private key will NOT be uploaded.');
-
-      // ---------- Step 4: upload only safe crypto payload ----------
-      print('\nSTEP 4 — Upload encryption material');
-
-      final completed = await api.uploadEncryptionMaterial(
-        registrationToken: verified.registrationToken,
-        encryptionMaterial: prepared.payload.toJson(),
-      );
-
-      print('\n==============================================');
-      print('       REGISTRATION COMPLETED');
-      print('==============================================');
-      print('Account ID: ${completed.accountId}');
-      print('Final status: ${completed.status}');
-      print('Activated at: ${completed.activatedAt}');
-    } finally {
-      // Best effort: overwrite the in-memory private-key bytes.
-      prepared.destroy();
-    }
+    print('\n========== BACKEND RESPONSE ==========');
+    print('Account ID: ${completed.accountId}');
+    print('Status: ${completed.status}');
+    print('Activated at: ${completed.activatedAt}');
   } on RegistrationApiException catch (error) {
-    print('\nBACKEND ERROR');
-    print(error.message);
-  } on StateError catch (error) {
-    print('\nINPUT ERROR');
-    print(error.message);
-  } catch (error, stackTrace) {
-    print('\nUNEXPECTED ERROR');
-    print(error);
-    print(stackTrace);
+    print('\nRegistration API error: ${error.message}');
+  } catch (error) {
+    print('\nRegistration test failed: $error');
+  } finally {
+    dio.close();
   }
 }
 
-String _ask(String label) {
+String ask(String label) {
   stdout.write('$label: ');
+  final value = stdin.readLineSync();
 
-  final value = stdin.readLineSync()?.trim() ?? '';
-
-  if (value.isEmpty) {
+  if (value == null || value.isEmpty) {
     throw StateError('$label cannot be empty.');
   }
-
   return value;
 }

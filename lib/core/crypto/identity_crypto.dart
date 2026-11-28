@@ -2,14 +2,12 @@ import 'dart:convert';
 import 'dart:typed_data';
 import 'package:cryptography/cryptography.dart';
 import 'package:cryptography/helpers.dart' show randomBytes;
-/// Keep an instance only while the app is unlocked.
-/// Never log, serialize, or send [privateKey] to the backend.
+import 'package:om_cryfio/core/crypto/password_derivation.dart';
 final class IdentityKeyPair {
   IdentityKeyPair({
-    required Uint8List privateKey,
-    required Uint8List publicKey,
-  })  : _privateKey = privateKey,
-        this.publicKey = publicKey;
+    required this._privateKey,
+    required this.publicKey,
+  });
 
   final Uint8List _privateKey;
   final Uint8List publicKey;
@@ -110,7 +108,14 @@ final class EncryptedIdentityBackup {
     return backup;
   }
 }
-
+final class PreparedIdentityBackup{
+  const PreparedIdentityBackup({
+    required this.backup,
+    required this.srpInput
+  });
+  final EncryptedIdentityBackup backup;
+  final  SecretKey srpInput;
+}
 final class IdentityCrypto {
   static const _backupFormatVersion = 1;
   static const _memoryKiB = 64 * 1024;
@@ -135,50 +140,59 @@ final class IdentityCrypto {
     required String accountId,
     required IdentityKeyPair identity,
   }) async {
+    final result = await prepareIdentityBackup(
+        password: password,
+        accountId: accountId,
+        identity: identity
+    );
+    return result.backup;
+  }
+  Future<PreparedIdentityBackup> prepareIdentityBackup({
+    required String password,
+    required String accountId,
+    required IdentityKeyPair identity
+  }) async {
     final salt = randomBytes(16,random: SecureRandom.system);
-
-    final kek = await _deriveBackupKek(
-      password: password,
-      salt: salt,
-      memoryKiB: _memoryKiB,
-      iterations: _iterations,
-      parallelism: _parallelism,
-    );
-
-    final payload = Uint8List.fromList(
-      utf8.encode(
-        jsonEncode({
-          'version': _backupFormatVersion,
-          'curve': 'X25519',
-          'privateKey': base64UrlEncode(identity.privateKey),
-          'publicKey': base64UrlEncode(identity.publicKey),
-        }),
-      ),
-    );
-
-    try {
-      final secretBox = await _aesGcm.encrypt(
-        payload,
-        secretKey: kek,
-        aad: _backupAad(accountId),
-      );
-
-      return EncryptedIdentityBackup(
-        version: _backupFormatVersion,
-        publicKey: identity.publicKey,
+    final keys = await PasswordDerivation().derive(
+        password: password,
         salt: salt,
         memoryKiB: _memoryKiB,
         iterations: _iterations,
-        parallelism: _parallelism,
-        nonce: Uint8List.fromList(secretBox.nonce),
-        ciphertext: Uint8List.fromList(secretBox.cipherText),
-        mac: Uint8List.fromList(secretBox.mac.bytes),
+        parallelism: _parallelism
+    );
+    final payload = Uint8List.fromList(utf8.encode(
+      jsonEncode({
+        'version': _backupFormatVersion,
+        'curve': 'X25519',
+        'privateKey': base64UrlEncode(identity.privateKey),
+        'publicKey': base64UrlEncode(identity.publicKey)
+      }),
+    ),
+    );
+    try{
+      final secretBox = await _aesGcm.encrypt(
+          payload,
+          secretKey: keys.backupKey,
+          aad: _backupAad(accountId)
+      );
+      return PreparedIdentityBackup(
+          backup: EncryptedIdentityBackup(
+              version: _backupFormatVersion,
+              publicKey: identity.publicKey,
+              salt: salt,
+              memoryKiB: _memoryKiB,
+              iterations: _iterations,
+              parallelism: _parallelism,
+              nonce: Uint8List.fromList(secretBox.nonce),
+              ciphertext: Uint8List.fromList(secretBox.cipherText),
+              mac: Uint8List.fromList(secretBox.mac.bytes)
+          ),
+          srpInput: keys.srpInput
       );
     } finally {
-      payload.fillRange(0, payload.length, 0);
+      payload.fillRange(0, payload.length,0);
     }
   }
-
   Future<IdentityKeyPair> decryptPrivateKeyBackup({
     required String password,
     required String accountId,
@@ -232,14 +246,14 @@ final class IdentityCrypto {
     required int iterations,
     required int parallelism,
   }) async {
-    final rootKey = await Argon2id(
-      memory: memoryKiB,
-      iterations: iterations,
-      parallelism: parallelism,
-      hashLength: 32,
-    ).deriveKeyFromPassword(password: password,nonce: salt,);
-    return Hkdf(hmac: Hmac.sha256(),outputLength: 32,)
-        .deriveKey(secretKey: rootKey, info: utf8.encode('om-cryfio/identity-backup-kek/v1'));
+    final keys = await PasswordDerivation().derive(
+        password: password,
+        salt: salt,
+        memoryKiB: memoryKiB,
+        iterations: iterations,
+        parallelism: parallelism
+    );
+    return keys.backupKey;
   }
 
   List<int> _backupAad(String accountId) {

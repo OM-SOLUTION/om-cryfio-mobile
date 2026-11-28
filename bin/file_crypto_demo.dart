@@ -2,7 +2,7 @@ import 'dart:convert';
 import 'dart:typed_data';
 
 import 'package:cryptography/cryptography.dart';
-import 'package:om_cryfio/features/crypto/file_crypto.dart';
+import 'package:om_cryfio/core/crypto/file_crypto.dart';
 
 String toBase64(List<int> bytes) => base64UrlEncode(bytes);
 
