@@ -33,6 +33,14 @@ final class AuthApiException implements Exception {
   @override
   String toString() => 'AuthApiException: $message';
 }
+final class RefreshedTokens {
+  const RefreshedTokens({
+    required this.accessToken,
+    required this.refreshToken
+  });
+  final String accessToken;
+  final String refreshToken;
+}
 final class AuthApi {
   AuthApi(this._dio);
   final Dio _dio;
@@ -83,6 +91,25 @@ final class AuthApi {
           refreshToken: data['refreshToken'] as String
       );
     } on DioException catch (error){
+      throw _dioError(error);
+    }
+  }
+  Future<RefreshedTokens> refreshTokens({
+    required String refreshToken
+  }) async {
+    try{
+      final response = await _dio.post<dynamic>(
+        '/api/v1/auth/refresh',
+        data: {
+          'refreshToken': refreshToken,
+        }
+      );
+      final data = _successData(response);
+      return RefreshedTokens(
+          accessToken: data['accessToken'] as String,
+          refreshToken: data['refreshToken'] as String
+      );
+    } on  DioException catch (error){
       throw _dioError(error);
     }
   }

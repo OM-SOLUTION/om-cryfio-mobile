@@ -98,4 +98,44 @@ void main() {
 
     dio.close();
   });
+  test('refreshTokens sends the token and returns rotated tokens', () async {
+    final dio = Dio(BaseOptions(baseUrl: 'http://localhost'));
+
+    dio.interceptors.add(
+      InterceptorsWrapper(
+        onRequest: (options, handler) {
+          expect(options.method, 'POST');
+          expect(options.path, '/api/v1/auth/refresh');
+          expect(options.data, {
+            'refreshToken': 'old-test-refresh-token',
+          });
+
+          handler.resolve(
+            Response<dynamic>(
+              requestOptions: options,
+              statusCode: 200,
+              data: {
+                'success': true,
+                'data': {
+                  'accessToken': 'new-test-access-token',
+                  'refreshToken': 'new-test-refresh-token',
+                },
+              },
+            ),
+          );
+        },
+      ),
+    );
+
+    final api = AuthApi(dio);
+
+    final tokens = await api.refreshTokens(
+      refreshToken: 'old-test-refresh-token',
+    );
+
+    expect(tokens.accessToken, 'new-test-access-token');
+    expect(tokens.refreshToken, 'new-test-refresh-token');
+
+    dio.close();
+  });
 }
